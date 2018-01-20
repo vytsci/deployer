@@ -22,52 +22,56 @@ task('deploy:shared', function () {
         }
     }
 
-    foreach (get('shared_dirs') as $dir) {
-        // Check if shared dir does not exists.
-        if (!test("[ -d $sharedPath/$dir ]")) {
-            // Create shared dir if it does not exist.
-            run("mkdir -p $sharedPath/$dir");
+    foreach (get('shared_dirs') as $pattern) {
+        foreach (glob($pattern) as $dir) {
+            // Check if shared dir does not exists.
+            if (!test("[ -d $sharedPath/$dir ]")) {
+                // Create shared dir if it does not exist.
+                run("mkdir -p $sharedPath/$dir");
 
-            // If release contains shared dir, copy that dir from release to shared.
-            if (test("[ -d $(echo {{release_path}}/$dir) ]")) {
-                run("cp -rv {{release_path}}/$dir $sharedPath/" . dirname($dir));
+                // If release contains shared dir, copy that dir from release to shared.
+                if (test("[ -d $(echo {{release_path}}/$dir) ]")) {
+                    run("cp -rv {{release_path}}/$dir $sharedPath/" . dirname($dir));
+                }
             }
+
+            // Remove from source.
+            run("rm -rf {{release_path}}/$dir");
+
+            // Create path to shared dir in release dir if it does not exist.
+            // Symlink will not create the path and will fail otherwise.
+            run("mkdir -p `dirname {{release_path}}/$dir`");
+
+            // Symlink shared dir to release dir
+            run("{{bin/symlink}} $sharedPath/$dir {{release_path}}/$dir");
         }
-
-        // Remove from source.
-        run("rm -rf {{release_path}}/$dir");
-
-        // Create path to shared dir in release dir if it does not exist.
-        // Symlink will not create the path and will fail otherwise.
-        run("mkdir -p `dirname {{release_path}}/$dir`");
-
-        // Symlink shared dir to release dir
-        run("{{bin/symlink}} $sharedPath/$dir {{release_path}}/$dir");
     }
 
-    foreach (get('shared_files') as $file) {
-        $dirname = dirname($file);
+    foreach (get('shared_files') as $pattern) {
+        foreach (glob($pattern) as $file) {
+            $dirname = dirname($file);
 
-        // Create dir of shared file
-        run("mkdir -p $sharedPath/" . $dirname);
+            // Create dir of shared file
+            run("mkdir -p $sharedPath/" . $dirname);
 
-        // Check if shared file does not exists in shared.
-        // and file exist in release
-        if (!test("[ -f $sharedPath/$file ]") && test("[ -f {{release_path}}/$file ]")) {
-            // Copy file in shared dir if not present
-            run("cp -rv {{release_path}}/$file $sharedPath/$file");
+            // Check if shared file does not exists in shared.
+            // and file exist in release
+            if (!test("[ -f $sharedPath/$file ]") && test("[ -f {{release_path}}/$file ]")) {
+                // Copy file in shared dir if not present
+                run("cp -rv {{release_path}}/$file $sharedPath/$file");
+            }
+
+            // Remove from source.
+            run("if [ -f $(echo {{release_path}}/$file) ]; then rm -rf {{release_path}}/$file; fi");
+
+            // Ensure dir is available in release
+            run("if [ ! -d $(echo {{release_path}}/$dirname) ]; then mkdir -p {{release_path}}/$dirname;fi");
+
+            // Touch shared
+            run("touch $sharedPath/$file");
+
+            // Symlink shared dir to release dir
+            run("{{bin/symlink}} $sharedPath/$file {{release_path}}/$file");
         }
-
-        // Remove from source.
-        run("if [ -f $(echo {{release_path}}/$file) ]; then rm -rf {{release_path}}/$file; fi");
-
-        // Ensure dir is available in release
-        run("if [ ! -d $(echo {{release_path}}/$dirname) ]; then mkdir -p {{release_path}}/$dirname;fi");
-
-        // Touch shared
-        run("touch $sharedPath/$file");
-
-        // Symlink shared dir to release dir
-        run("{{bin/symlink}} $sharedPath/$file {{release_path}}/$file");
     }
 });
